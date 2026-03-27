@@ -195,14 +195,14 @@ Each chunk is classified into:
 
 | Dimension | Values | Used For |
 |-----------|--------|----------|
-| `module` | `auth`, `cart`, `listings`, `api`, `ui`, etc. | Filter by feature area |
+| `module` | `auth`, `billing`, `notifications`, `users`, `api`, `ui`, etc. | Filter by feature area |
 | `doc_type` | `service`, `controller`, `component`, `test`, `schema`, `config`, `spec` | Filter by layer |
 | `category` | `business-logic`, `data-access`, `api-contract`, `ui-component`, `infrastructure` | Semantic grouping |
 | `language` | `typescript`, `python`, `vue`, `markdown` | Language-specific queries |
 
 This lets agents ask precise questions:
 - *"authentication service business logic"* → only auth module, service doc_type
-- *"cart component UI"* → only cart module, component doc_type
+- *"billing component UI"* → only billing module, component doc_type
 
 See [docs/embeddings.md](docs/embeddings.md) for the classification algorithm.
 
@@ -214,18 +214,18 @@ Bi-encoder (embedding model) is fast but imprecise — it scores each chunk inde
 Cross-encoder re-ranking reads the query AND each chunk together — much more accurate.
 
 ```
-Query: "how does the payment retry logic work?"
+Query: "how does the email notification retry logic work?"
 
 Bi-encoder top-20:
-  1. payments/payment-gateway.service.ts (score: 0.82) ← correct
-  2. orders/orders.service.ts (score: 0.80)      ← partially relevant
-  3. cart/cart.service.ts (score: 0.78)          ← noise
+  1. notifications/<email-sender> (score: 0.82)       ← correct
+  2. users/<event-handler> (score: 0.80)              ← partially relevant
+  3. scheduler/<job-runner> (score: 0.78)             ← noise
   ...
 
 Cross-encoder re-ranked top-5:
-  1. payments/payment-gateway.service.ts (score: 0.94) ← correct, now #1
-  2. payments/retry-handler.service.ts (score: 0.91)     ← relevant, was #7
-  3. orders/order-process.service.ts (score: 0.73)
+  1. notifications/<email-sender> (score: 0.94)       ← correct, now #1
+  2. notifications/<retry-handler> (score: 0.91)      ← relevant, was #7
+  3. scheduler/<notification-processor> (score: 0.73)
 ```
 
 Use `--rerank` flag in `query_rag.py`. See [docs/reranking.md](docs/reranking.md).

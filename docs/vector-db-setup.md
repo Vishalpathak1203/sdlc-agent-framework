@@ -75,7 +75,7 @@ Properties:
   chunk_id     TEXT    — unique: "file_path::chunk_N"
   file_path    TEXT    — relative path from repo root
   content      TEXT    — chunk text (2000 chars max)
-  module       TEXT    — feature module (auth, cart, listings...)
+  module       TEXT    — feature module (auth, billing, notifications...)
   doc_type     TEXT    — service | controller | component | test | schema | config
   category     TEXT    — business-logic | data-access | api-contract | ui-component | infrastructure
   language     TEXT    — typescript | python | vue | markdown | other

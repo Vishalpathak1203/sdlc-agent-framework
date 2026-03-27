@@ -34,7 +34,7 @@ Before indexing, source files are split into overlapping chunks.
 **Why overlap?** A function that spans chunk boundaries would be cut in half without it. Overlap ensures context continuity.
 
 ```
-File: orders.service.ts (8000 chars)
+File: <users/account-manager> (8000 chars)
 
 Chunk 1: chars 0–2000
 Chunk 2: chars 1800–3800   ← 200 char overlap with chunk 1
@@ -98,12 +98,12 @@ Top-20 results
 
 Example:
 ```
-Query: "OrdersService processPayment"
+Query: "send notification on user signup"
 
-Vector search finds:     BM25 finds:
-- orders.service.ts      - orders.service.ts   ← both agree = rank 1
-- payments.service.ts    - payments.model.ts
-- cart.service.ts        - order-processor.ts
+Vector search finds:                    BM25 finds:
+- <notifications/email-sender>          - <notifications/email-sender>    ← both agree = rank 1
+- <notifications/template-manager>      - <notifications/template-data>
+- <scheduler/job-runner>                - <scheduler/notification-processor>
 ```
 
 ---
@@ -136,16 +136,16 @@ Cost: ~200ms extra latency. Worth it for complex queries.
 The top-5 chunks are formatted and prepended to the LLM prompt:
 
 ```
-## RAG Context [CodebaseKnowledge]: 'payment retry logic' (top 5)
+## RAG Context [CodebaseKnowledge]: 'email notification retry logic' (top 5)
 
-### [1] src/payments/payment-gateway.service.ts (distance: 0.041)
-Module: payments | Type: service
+### [1] <notifications/email-sender> (distance: 0.041)
+Module: notifications | Type: service
 
 <content of chunk>
 
 ---
 
-### [2] src/payments/retry-handler.service.ts (distance: 0.063)
+### [2] <notifications/retry-handler> (distance: 0.063)
 ...
 ```
 

@@ -86,7 +86,7 @@ scores = model.predict([(query, doc1), (query, doc2), ...])
 
 Add `--rerank` flag:
 ```bash
-python scripts/query_rag.py "payment retry logic" --project myapp --rerank --top 5
+python scripts/query_rag.py "email notification retry logic" --project myapp --rerank --top 5
 ```
 
 ---
@@ -97,7 +97,7 @@ Embedding models are trained predominantly on text. Code has patterns that confu
 
 | Challenge | Bi-encoder behavior | Cross-encoder behavior |
 |-----------|--------------------|-----------------------|
-| Identifier names | "processOrder" ≠ "orderProcess" | Recognizes same concept |
+| Identifier names | "sendNotification" ≠ "notificationSend" | Recognizes same concept |
 | Method signatures | Ignores parameter types | Considers full signature |
 | Comments vs. code | May rank comment-heavy files higher | Balances both |
 | Negation | "don't use deprecated API" → ranks deprecated API files | Handles negation |

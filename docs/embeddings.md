@@ -16,7 +16,7 @@ What business capability does this file belong to?
 MODULE_PATTERNS = {
     # NestJS / Express backend
     "auth":          ["**/auth/**", "**/authentication/**", "**/user-auth/**"],
-    "cart":          ["**/cart*/**", "**/carts/**", "**/shopping-cart/**"],
+    "billing":       ["**/billing*/**", "**/invoice*/**", "**/subscription*/**"],
     "orders":        ["**/order*/**", "**/orders/**"],
     "payments":      ["**/payment*/**", "**/billing/**"],
     "listings":      ["**/listing*/**", "**/product*/**", "**/catalog/**"],
@@ -63,13 +63,13 @@ A higher-level semantic grouping that cuts across modules:
 
 | `category` | Description | Example files |
 |------------|-------------|--------------|
-| `business-logic` | Core domain rules | `orders.service.ts`, `pricing.service.ts` |
-| `data-access` | DB queries, ORM, repositories | `*.repository.ts`, `*.schema.ts` |
-| `api-contract` | Request/response shapes | `*.dto.ts`, `*.interface.ts`, OpenAPI specs |
-| `ui-component` | Visual UI components | `*.vue`, React components |
-| `infrastructure` | Config, queues, caching | `app.module.ts`, Redis config |
-| `testing` | Test helpers, fixtures, factories | `*.spec.ts`, `test-utils.ts` |
-| `integration` | External service clients | Braintree, Stripe, Jira clients |
+| `business-logic` | Core domain rules | `<users/account-manager>`, `<billing/invoice-manager>` |
+| `data-access` | DB queries, ORM, repositories | `<module/data-repository>`, `<module/data-schema>` |
+| `api-contract` | Request/response shapes | `<module/request-dto>`, `<module/response-type>`, OpenAPI specs |
+| `ui-component` | Visual UI components | `<feature/display-component>`, `<feature/form-component>` |
+| `infrastructure` | Config, queues, caching | `<app/bootstrap>`, `<app/cache-config>` |
+| `testing` | Test helpers, fixtures, factories | `<module/feature-test>`, `<shared/test-utils>` |
+| `integration` | External service clients | Payment gateway, analytics, CRM clients |
 
 ### 4. `language`
 
@@ -95,28 +95,28 @@ LANGUAGE_MAP = {
 ### Without classification
 
 ```
-Query: "how does order payment processing work"
+Query: "how does user subscription billing work"
 
 Results (top 5):
-  1. orders.service.ts          ← relevant ✅
-  2. README.md                  ← noise ❌
-  3. orders.spec.ts             ← partially relevant
-  4. package.json               ← noise ❌
-  5. cart.service.ts            ← partially relevant
+  1. <billing/invoice-manager>     ← relevant ✅
+  2. README.md                     ← noise ❌
+  3. <billing/invoice-manager-test>← partially relevant
+  4. package.json                  ← noise ❌
+  5. <users/account-manager>       ← partially relevant
 ```
 
 ### With classification + filtered query
 
 ```
-Query: "how does order payment processing work"
-Filter: module IN ["orders", "payments"], doc_type IN ["service"]
+Query: "how does user subscription billing work"
+Filter: module IN ["billing", "subscriptions"], doc_type IN ["service"]
 
 Results (top 5):
-  1. orders.service.ts          ← relevant ✅
-  2. payments.service.ts        ← relevant ✅
-  3. order-process.service.ts   ← relevant ✅
-  4. payment-gateway.service.ts       ← relevant ✅
-  5. refund.service.ts          ← relevant ✅
+  1. <billing/invoice-manager>        ← relevant ✅
+  2. <subscriptions/plan-manager>     ← relevant ✅
+  3. <billing/invoice-processor>      ← relevant ✅
+  4. <payments/gateway-connector>     ← relevant ✅
+  5. <billing/refund-processor>       ← relevant ✅
 ```
 
 Filters reduce the search space before vector scoring. Results are all relevant.
@@ -166,7 +166,7 @@ After `git rebase` or large merges, run `--full` to force re-embed everything.
 ### Source code files
 
 ```python
-# Include file path as context — "auth/login.service.ts" carries semantic meaning
+# Include file path as context — "<auth/login-handler>" carries semantic meaning
 embedding_text = f"File: {file_path}\n\n{chunk_content}"
 ```
 

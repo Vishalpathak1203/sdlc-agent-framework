@@ -9,7 +9,7 @@ alwaysApply: true
 ## Module Organization
 
 - Modules represent features/capabilities (e.g., `orders`, `auth`, `cart`)
-- Services are dependency-injectable solutions (e.g., `orders.service.ts`)
+- Services are dependency-injectable solutions (e.g., `billing.service.ts`)
 - Never create generic module names like `helpers.module.ts`
 - Use feature-based organization, not type-based (not `controllers/`, `services/`)
 
@@ -24,7 +24,7 @@ alwaysApply: true
 
 | Type | Convention | Example |
 |------|-----------|---------|
-| Backend files | kebab-case | `order-processor.service.ts` |
+| Backend files | kebab-case | `notification-sender.service.ts` |
 | Frontend components | PascalCase | `OrderSummary.vue` |
 | Frontend files | camelCase | `useOrderStore.ts` |
 | Test files | same as source + `.spec` or `.test` | `order.service.spec.ts` |
