@@ -350,6 +350,7 @@ AGENTS_WEAVIATE_URL=http://localhost:8090 \
 
 | Doc | What It Covers |
 |-----|----------------|
+| [docs/developer-guide.md](docs/developer-guide.md) | **Start here** — mindset shift, step-by-step agent commands, how to review agent output |
 | [docs/rag-basics.md](docs/rag-basics.md) | RAG fundamentals, chunking, retrieval, injection |
 | [docs/vector-db-setup.md](docs/vector-db-setup.md) | Weaviate install, HNSW, BM25, hybrid search, tuning |
 | [docs/embeddings.md](docs/embeddings.md) | Module classification, doc_type taxonomy, category schema |
