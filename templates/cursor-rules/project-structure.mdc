@@ -17,7 +17,7 @@ alwaysApply: true
 
 - New feature → new module directory
 - Shared utilities → `common/` or `shared/`
-- External integrations → dedicated module (e.g., `braintree/`, `stripe/`)
+- External integrations → dedicated module (e.g., `payment-gateway/`, `analytics/`)
 - Config/constants → `config/` at module level
 
 ## Naming Conventions

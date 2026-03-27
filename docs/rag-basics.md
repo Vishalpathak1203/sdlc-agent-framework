@@ -138,14 +138,14 @@ The top-5 chunks are formatted and prepended to the LLM prompt:
 ```
 ## RAG Context [CodebaseKnowledge]: 'payment retry logic' (top 5)
 
-### [1] src/payments/braintree.service.ts (distance: 0.041)
+### [1] src/payments/payment-gateway.service.ts (distance: 0.041)
 Module: payments | Type: service
 
 <content of chunk>
 
 ---
 
-### [2] src/payments/retry-handler.ts (distance: 0.063)
+### [2] src/payments/retry-handler.service.ts (distance: 0.063)
 ...
 ```
 

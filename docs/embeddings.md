@@ -18,7 +18,7 @@ MODULE_PATTERNS = {
     "auth":          ["**/auth/**", "**/authentication/**", "**/user-auth/**"],
     "cart":          ["**/cart*/**", "**/carts/**", "**/shopping-cart/**"],
     "orders":        ["**/order*/**", "**/orders/**"],
-    "payments":      ["**/payment*/**", "**/braintree/**", "**/stripe/**", "**/billing/**"],
+    "payments":      ["**/payment*/**", "**/billing/**"],
     "listings":      ["**/listing*/**", "**/product*/**", "**/catalog/**"],
     "notifications": ["**/notification*/**", "**/email/**", "**/sms/**"],
     "users":         ["**/user*/**", "**/profile*/**", "**/account/**"],
@@ -115,7 +115,7 @@ Results (top 5):
   1. orders.service.ts          ← relevant ✅
   2. payments.service.ts        ← relevant ✅
   3. order-process.service.ts   ← relevant ✅
-  4. braintree.service.ts       ← relevant ✅
+  4. payment-gateway.service.ts       ← relevant ✅
   5. refund.service.ts          ← relevant ✅
 ```
 

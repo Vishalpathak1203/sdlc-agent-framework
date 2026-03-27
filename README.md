@@ -217,14 +217,14 @@ Cross-encoder re-ranking reads the query AND each chunk together — much more a
 Query: "how does the payment retry logic work?"
 
 Bi-encoder top-20:
-  1. payments/braintree.service.ts (score: 0.82) ← correct
+  1. payments/payment-gateway.service.ts (score: 0.82) ← correct
   2. orders/orders.service.ts (score: 0.80)      ← partially relevant
   3. cart/cart.service.ts (score: 0.78)          ← noise
   ...
 
 Cross-encoder re-ranked top-5:
-  1. payments/braintree.service.ts (score: 0.94) ← correct, now #1
-  2. payments/retry-handler.ts (score: 0.91)     ← relevant, was #7
+  1. payments/payment-gateway.service.ts (score: 0.94) ← correct, now #1
+  2. payments/retry-handler.service.ts (score: 0.91)     ← relevant, was #7
   3. orders/order-process.service.ts (score: 0.73)
 ```
 

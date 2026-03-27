@@ -76,55 +76,66 @@ SKIP_PATTERNS = {"*.d.ts", "*.min.js", "*.map", "*.snap", "*.generated.*"}
 # Add your project's module structure here.
 MODULE_PATTERNS: list[tuple[str, list[str]]] = [
     # Auth / Identity
-    ("auth",          ["**/auth/**", "**/authentication/**", "**/user-auth/**", "**/login/**"]),
-    # Payments
-    ("payments",      ["**/payment*/**", "**/braintree/**", "**/stripe/**", "**/billing/**", "**/plutus/**"]),
+    ("auth",          ["**/auth/**", "**/authentication/**", "**/user-auth/**", "**/login/**",
+                       "**/identity/**", "**/sso/**"]),
+    # Payments / Billing
+    ("payments",      ["**/payment*/**", "**/billing/**", "**/invoice*/**",
+                       "**/subscription-billing/**", "**/checkout-payment/**"]),
     # Orders
     ("orders",        ["**/order*/**"]),
     # Cart / Checkout
-    ("cart",          ["**/cart*/**", "**/checkout*/**", "**/shopping*/**"]),
+    ("cart",          ["**/cart*/**", "**/checkout*/**", "**/shopping*/**", "**/basket*/**"]),
     # Listings / Products / Catalog
-    ("listings",      ["**/listing*/**", "**/product*/**", "**/catalog*/**"]),
+    ("listings",      ["**/listing*/**", "**/product*/**", "**/catalog*/**", "**/item*/**"]),
     # Notifications
-    ("notifications", ["**/notification*/**", "**/email/**", "**/sms/**", "**/hermes/**"]),
+    ("notifications", ["**/notification*/**", "**/email/**", "**/sms/**", "**/push/**",
+                       "**/mailer/**", "**/emailer/**"]),
     # Users / Profiles
-    ("users",         ["**/user*/**", "**/profile*/**", "**/account*/**"]),
+    ("users",         ["**/user*/**", "**/profile*/**", "**/account*/**", "**/member*/**"]),
     # Search
-    ("search",        ["**/search/**", "**/elastic*/**", "**/solr/**"]),
+    ("search",        ["**/search/**", "**/elastic*/**", "**/solr/**", "**/index*/**"]),
     # Scheduler / Jobs / Queues
-    ("scheduler",     ["**/scheduler/**", "**/cron/**", "**/jobs/**", "**/queue*/**", "**/processor*/**"]),
-    # Webhooks
-    ("webhooks",      ["**/webhook*/**", "**/hooks/**", "**/webhooker/**"]),
-    # VHR / Reports
-    ("vhr",           ["**/vhr/**", "**/vehicle-history*/**", "**/report*/**"]),
-    # Fraud / Security
-    ("fraud",         ["**/fraud/**", "**/kount/**", "**/risk/**"]),
-    # Saved items
-    ("saved",         ["**/saved*/**", "**/bookmark*/**", "**/wishlist*/**"]),
+    ("scheduler",     ["**/scheduler/**", "**/cron/**", "**/jobs/**", "**/queue*/**",
+                       "**/worker*/**", "**/processor*/**", "**/task*/**"]),
+    # Webhooks / Events
+    ("webhooks",      ["**/webhook*/**", "**/hooks/**", "**/event*/**", "**/listener*/**"]),
+    # Reports / Documents
+    ("reports",       ["**/report*/**", "**/document*/**", "**/export*/**", "**/pdf*/**"]),
+    # Fraud / Risk
+    ("fraud",         ["**/fraud/**", "**/risk/**", "**/compliance/**", "**/abuse/**"]),
+    # Saved items / Favorites
+    ("saved",         ["**/saved*/**", "**/bookmark*/**", "**/wishlist*/**", "**/favorite*/**"]),
     # Admin / Dashboard
-    ("admin",         ["**/admin*/**", "**/dashboard/**", "**/backoffice/**"]),
+    ("admin",         ["**/admin*/**", "**/dashboard/**", "**/backoffice/**", "**/internal/**"]),
     # Messages / Chat
-    ("messages",      ["**/message*/**", "**/chat/**", "**/inbox/**"]),
+    ("messages",      ["**/message*/**", "**/chat/**", "**/inbox/**", "**/thread*/**",
+                       "**/conversation*/**"]),
     # Pricing / Discount
-    ("pricing",       ["**/pricing/**", "**/discount*/**", "**/coupon*/**"]),
-    # Subscriptions
-    ("subscriptions", ["**/subscription*/**", "**/plan*/**"]),
+    ("pricing",       ["**/pricing/**", "**/discount*/**", "**/coupon*/**", "**/promo*/**"]),
+    # Subscriptions / Plans
+    ("subscriptions", ["**/subscription*/**", "**/plan*/**", "**/tier*/**"]),
     # Device / Session
-    ("device",        ["**/device*/**", "**/session*/**"]),
+    ("device",        ["**/device*/**", "**/session*/**", "**/token*/**"]),
     # Refund / Returns
-    ("refund",        ["**/refund*/**", "**/return*/**"]),
+    ("refund",        ["**/refund*/**", "**/return*/**", "**/chargeback*/**"]),
     # UI common / components
-    ("ui-common",     ["**/components/common/**", "**/components/shared/**"]),
+    ("ui-common",     ["**/components/common/**", "**/components/shared/**",
+                       "**/components/ui/**", "**/design-system/**"]),
     # UI pages
-    ("ui-pages",      ["**/pages/**"]),
+    ("ui-pages",      ["**/pages/**", "**/views/**", "**/screens/**"]),
     # UI stores / state
-    ("ui-stores",     ["**/stores/**", "**/store/**"]),
-    # UI composables
-    ("ui-composables",["**/composables/**"]),
+    ("ui-stores",     ["**/stores/**", "**/store/**", "**/state/**", "**/context/**"]),
+    # UI composables / hooks
+    ("ui-composables",["**/composables/**", "**/hooks/**", "**/use-*.ts", "**/use-*.js"]),
     # Infrastructure / Config
-    ("infra",         ["**/config/**", "**/infra/**", "**/setup/**"]),
-    # External integrations
-    ("integration",   ["**/nebulous/**", "**/external*/**", "**/third-party/**"]),
+    ("infra",         ["**/config/**", "**/infra/**", "**/setup/**", "**/middleware/**",
+                       "**/bootstrap/**"]),
+    # External service integrations
+    # Add your 3rd-party service directories here, e.g.:
+    #   ("payments-gateway", ["**/stripe/**", "**/paypal/**"]),
+    #   ("analytics",        ["**/segment/**", "**/mixpanel/**"]),
+    ("integration",   ["**/external*/**", "**/third-party/**", "**/partner*/**",
+                       "**/api-client*/**", "**/sdk*/**"]),
 ]
 
 
