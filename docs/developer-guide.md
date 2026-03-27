@@ -38,19 +38,66 @@ uv pip install --python ~/.sdlc-agents-venv/bin/python -r scripts/requirements.t
 
 # 3. Start Weaviate (keep this terminal open permanently)
 ~/.sdlc-agents-venv/bin/python "$AGENTS_ROOT/scripts/start_weaviate.py"
-
-# 4. Initialize schema
-AGENTS_WEAVIATE_URL=http://localhost:8090 \
-~/.sdlc-agents-venv/bin/python "$AGENTS_ROOT/scripts/update_kb.py" --init-schema
-
-# 5. Index your codebase (first time)
-AGENTS_WEAVIATE_URL=http://localhost:8090 \
-~/.sdlc-agents-venv/bin/python "$AGENTS_ROOT/scripts/update_kb.py" \
-  --repo-root /path/to/your/project --project myapp
-
-# 6. Copy agent commands into your project
-cp -r claude/commands /path/to/your/project/.claude/commands/
 ```
+
+**Steps 4–6 are handled automatically by `/configure`.** See below.
+
+---
+
+## Step 0 — Configure for Your Stack (Run Once Per Project)
+
+Before anything else, run the configure command. It detects your tech stack, maps your directories to modules, writes all config files, and runs the first KB index — all in one shot.
+
+**Claude Code:**
+```
+/configure /path/to/your/project
+```
+
+Or if you're already inside your project directory in the Claude Code session:
+```
+/configure
+```
+
+**Cursor:** Open Composer → reference `cursor/agents/configure.md` → type the project path → send.
+
+**What the configure command does automatically:**
+1. Detects your stack (NestJS, Django, Rails, Spring Boot, Next.js, Go, Laravel, etc.)
+2. Scans your directories and maps them to module names (`auth`, `payments`, `orders`, etc.)
+3. Detects your test/lint/build commands
+4. Writes `CLAUDE.md` tailored to your stack
+5. Writes `.claude/settings.json` with correct script paths and permissions
+6. Copies all 10 agent commands into your project
+7. Initializes the Weaviate schema for your project
+8. Runs the first full KB index
+9. Runs a test query to confirm RAG is working
+
+**Before it writes anything**, it shows you a full summary and asks for confirmation. You can correct anything — wrong module names, missed directories, wrong test command — before it proceeds.
+
+After `/configure` completes, you're ready to run all other agents.
+
+---
+
+## Supported Stacks
+
+`/configure` handles these stacks out of the box:
+
+| Stack | Detected by |
+|-------|------------|
+| NestJS (TypeScript) | `@nestjs/core` in package.json |
+| Nuxt / Vue 3 | `nuxt` in package.json |
+| Next.js / React | `next` in package.json |
+| Express / Fastify | `express`/`fastify` in package.json |
+| Django | `django` in requirements.txt |
+| FastAPI | `fastapi` in requirements.txt |
+| Flask | `flask` in requirements.txt |
+| Ruby on Rails | Rails in Gemfile |
+| Spring Boot | pom.xml / build.gradle present |
+| Go | go.mod present |
+| Laravel | `laravel` in composer.json |
+| Rust | Cargo.toml present |
+| Monorepo | pnpm-workspace.yaml / nx.json / turbo.json / apps/ dir |
+
+For anything not in this list, the configure agent falls back to scanning directory names and detecting patterns generically — it will still produce a usable config, but you may want to review and tune the generated `project-<name>.py` file.
 
 ---
 

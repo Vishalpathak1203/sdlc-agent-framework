@@ -19,6 +19,7 @@ cp -r /path/to/sdlc-agent-framework/claude/commands/* /path/to/your/project/.cla
 ```
 
 This gives you these slash commands:
+- `/configure` — **start here** — auto-detect stack, generate config, run first KB index
 - `/solution` — draft solution approach for a ticket
 - `/code` — TDD implementation agent
 - `/review-code` — code review against standards + patterns

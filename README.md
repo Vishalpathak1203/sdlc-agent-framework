@@ -61,7 +61,7 @@ sdlc-agent-framework/
 
 ---
 
-## Quick Start (15 minutes)
+## Quick Start (5 minutes)
 
 ### Prerequisites
 
@@ -97,32 +97,29 @@ python3 -m venv ~/.sdlc-agents-venv
 # Runs on http://localhost:8090 — leave this terminal open
 ```
 
-### 4. Initialize schema
+### 4. Run `/configure` in your project
 
-```bash
-AGENTS_WEAVIATE_URL=http://localhost:8090 \
-~/.sdlc-agents-venv/bin/python "$AGENTS_ROOT/scripts/update_kb.py" --init-schema
+Open Claude Code (or Cursor) inside your project directory and run:
+
+```
+/configure
 ```
 
-### 5. Index your codebase
+That's it. The configure command handles everything else automatically:
+- Detects your tech stack (NestJS, Django, Rails, Spring Boot, Next.js, Go, Laravel, and more)
+- Maps your directories to module names
+- Detects your test/lint/build commands
+- Writes `CLAUDE.md` and `.claude/settings.json` tailored to your stack
+- Copies all 10 agent commands into your project
+- Initializes the Weaviate schema
+- Runs the first KB index
+- Validates RAG with a test query
 
-```bash
-export PROJECT_ROOT=/path/to/your/project
+Before writing any files, it shows a full summary and waits for your confirmation.
 
-AGENTS_WEAVIATE_URL=http://localhost:8090 \
-~/.sdlc-agents-venv/bin/python "$AGENTS_ROOT/scripts/update_kb.py" \
-  --repo-root "$PROJECT_ROOT" --project myproject
-```
+**Supported stacks:** NestJS · Nuxt · Next.js · Express · FastAPI · Django · Flask · Rails · Spring Boot · Go · Laravel · Rust · any monorepo structure
 
-### 6. Test RAG
-
-```bash
-AGENTS_WEAVIATE_URL=http://localhost:8090 \
-~/.sdlc-agents-venv/bin/python "$AGENTS_ROOT/scripts/query_rag.py" \
-  "authentication middleware" --project myproject
-```
-
-You should see relevant code snippets from your codebase. Done.
+See [docs/developer-guide.md](docs/developer-guide.md) for the full walkthrough after setup.
 
 ---
 
@@ -350,7 +347,7 @@ AGENTS_WEAVIATE_URL=http://localhost:8090 \
 
 | Doc | What It Covers |
 |-----|----------------|
-| [docs/developer-guide.md](docs/developer-guide.md) | **Start here** — mindset shift, step-by-step agent commands, how to review agent output |
+| [docs/developer-guide.md](docs/developer-guide.md) | **Start here** — `/configure`, mindset shift, step-by-step agent commands, how to review output |
 | [docs/rag-basics.md](docs/rag-basics.md) | RAG fundamentals, chunking, retrieval, injection |
 | [docs/vector-db-setup.md](docs/vector-db-setup.md) | Weaviate install, HNSW, BM25, hybrid search, tuning |
 | [docs/embeddings.md](docs/embeddings.md) | Module classification, doc_type taxonomy, category schema |
