@@ -1,0 +1,51 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(pnpm:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(gh:*)",
+      "Bash(~/.sdlc-agents-venv/bin/python:*)",
+      "Bash(python3:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)"
+    ]
+  },
+  "mcpServers": {
+    "mcp-atlassian": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-atlassian"],
+      "env": {
+        "JIRA_URL": "https://your-org.atlassian.net",
+        "JIRA_EMAIL": "your.email@company.com",
+        "JIRA_API_TOKEN": "REPLACE_WITH_YOUR_JIRA_TOKEN"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "REPLACE_WITH_YOUR_GITHUB_TOKEN"
+      }
+    }
+  },
+  "env": {
+    "AGENTS_ROOT": "REPLACE_WITH_PATH_TO_SDLC_AGENT_FRAMEWORK",
+    "AGENTS_VENV": "REPLACE_WITH_PATH_TO_VENV/bin/python",
+    "AGENTS_WEAVIATE_URL": "http://localhost:8090",
+    "AGENTS_PROJECT": "REPLACE_WITH_YOUR_PROJECT_NAME"
+  }
+}

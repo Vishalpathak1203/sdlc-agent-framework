@@ -1,0 +1,39 @@
+---
+description: Code quality standards
+globs: ["**/*.ts", "**/*.tsx", "**/*.vue", "**/*.js", "**/*.py", "**/*.rb", "**/*.java"]
+alwaysApply: false
+---
+
+# Code Quality Standards
+
+## Single Responsibility
+- Each function does one thing
+- Each module owns one domain
+- Break complex functions into named helpers
+
+## Error Handling
+- Validate inputs at system boundaries (user input, external APIs)
+- Use try/catch for async operations
+- Return specific error types, not generic `Error`
+
+## Naming
+- Function names describe what they do: `processOrderPayment` not `handle`
+- Boolean variables start with `is`, `has`, `can`: `isAuthenticated`
+- Constants in SCREAMING_SNAKE_CASE
+
+## Comments
+- Add comments only when logic is non-obvious
+- Prefer descriptive function names over explanatory comments
+- Document the WHY, not the WHAT
+
+## Avoid
+- Nested callbacks / callback hell
+- Magic numbers (use named constants)
+- Premature abstraction (three similar lines beat a premature helper)
+- Feature flags for one-time code
+
+## Testing
+- Write tests before implementation (TDD)
+- Test behavior, not implementation details
+- Use `test.each()` / `@pytest.mark.parametrize` for repetitive cases
+- Cover: happy path, null/empty, boundaries, error cases

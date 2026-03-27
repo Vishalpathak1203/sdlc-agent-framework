@@ -1,0 +1,36 @@
+---
+description: Project structure conventions
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Project Structure
+
+## Module Organization
+
+- Modules represent features/capabilities (e.g., `orders`, `auth`, `cart`)
+- Services are dependency-injectable solutions (e.g., `orders.service.ts`)
+- Never create generic module names like `helpers.module.ts`
+- Use feature-based organization, not type-based (not `controllers/`, `services/`)
+
+## File Placement
+
+- New feature → new module directory
+- Shared utilities → `common/` or `shared/`
+- External integrations → dedicated module (e.g., `braintree/`, `stripe/`)
+- Config/constants → `config/` at module level
+
+## Naming Conventions
+
+| Type | Convention | Example |
+|------|-----------|---------|
+| Backend files | kebab-case | `order-processor.service.ts` |
+| Frontend components | PascalCase | `OrderSummary.vue` |
+| Frontend files | camelCase | `useOrderStore.ts` |
+| Test files | same as source + `.spec` or `.test` | `order.service.spec.ts` |
+
+## Do Not
+
+- Add to index files (`index.ts`) — create specific utility files instead
+- Create `utils.ts` mega-files — break into `string-utils.ts`, `date-utils.ts`, etc.
+- Mix concerns in one file (DB access + business logic + HTTP handling)
