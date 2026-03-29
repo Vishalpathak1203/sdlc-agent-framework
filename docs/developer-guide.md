@@ -175,10 +175,10 @@ Per-ticket (in order):
 
 **Claude Code:**
 ```
-/solution DR-1234
+/solution PROJ-1234
 ```
 
-**Cursor:** Open Composer → reference `cursor/agents/solution-approach.md` → type `Ticket: DR-1234` → send.
+**Cursor:** Open Composer → reference `cursor/agents/solution-approach.md` → type `Ticket: PROJ-1234` → send.
 
 **What it does:**
 1. Fetches the Jira ticket (title, description, acceptance criteria) via MCP
@@ -210,10 +210,10 @@ Also, you missed that this feature requires updating the order status schema.
 
 **Claude Code:**
 ```
-/code DR-1234
+/code PROJ-1234
 ```
 
-**Cursor:** Open Composer → reference `cursor/agents/code-agent.md` → type `Ticket: DR-1234` → send.
+**Cursor:** Open Composer → reference `cursor/agents/code-agent.md` → type `Ticket: PROJ-1234` → send.
 
 **What it does:**
 1. Retrieves the approved solution from `SolutionApproach` collection
@@ -371,9 +371,9 @@ Morning:
   1. /update-kb                    ← sync codebase changes overnight
 
 Per ticket:
-  2. /solution DR-XXXX             ← agent drafts the plan
+  2. /solution PROJ-XXXX             ← agent drafts the plan
   3. Review + correct              ← YOU approve or redirect
-  4. /code DR-XXXX                 ← agent implements
+  4. /code PROJ-XXXX                 ← agent implements
   5. Review diff + give feedback   ← YOU review as you would a junior dev's PR
   6. /unit-test-review             ← agent audits tests
   7. /safe-commit                  ← agent runs checks + generates commit message

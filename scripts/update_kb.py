@@ -10,7 +10,10 @@ Usage:
   python update_kb.py --repo-root . --project myapp --full
   python update_kb.py --standards --repo-root . --project myapp
   python update_kb.py --init-schema --project myapp
+  python update_kb.py --migrate --project myapp    # drop + recreate (use after model change)
   python update_kb.py --stats --project myapp
+  python update_kb.py --prune --repo-root . --project myapp
+  python update_kb.py --adrs --repo-root . --project myapp
 """
 
 import argparse
@@ -27,11 +30,20 @@ import weaviate.classes as wvc
 from fastembed import TextEmbedding
 
 WEAVIATE_URL = os.getenv("AGENTS_WEAVIATE_URL", "http://localhost:8090")
-EMBED_MODEL_NAME = "BAAI/bge-small-en-v1.5"
-EMBED_DIMS = 384
+WEAVIATE_GRPC_PORT = int(os.getenv("AGENTS_WEAVIATE_GRPC_PORT", "0"))
+
+# Code-aware embedding model (768d). Upgrade from BAAI/bge-small-en-v1.5 (384d).
+# If you change this, run --migrate then --full to rebuild all vectors.
+EMBED_MODEL_NAME = "jinaai/jina-embeddings-v2-base-code"
+EMBED_DIMS = 768
+
 BATCH_SIZE = 25
 CHUNK_SIZE = 2000
 CHUNK_OVERLAP = 200
+
+# Raise this if large service files are being skipped (check with --stats).
+# Common culprits: God-class services, generated clients, large fixtures.
+MAX_FILE_BYTES = 150_000
 
 _embedder: TextEmbedding | None = None
 
@@ -54,8 +66,6 @@ INCLUDE_EXTENSIONS = {
     ".md", ".mdx",
 }
 
-MAX_FILE_BYTES = 50_000
-
 SKIP_DIRS = {
     "node_modules", ".git", "dist", "build", "__pycache__",
     ".next", ".nuxt", "coverage", ".turbo", "out", "vendor",
@@ -71,71 +81,73 @@ SKIP_PATTERNS = {"*.d.ts", "*.min.js", "*.map", "*.snap", "*.generated.*"}
 
 
 # ── Module classification ──────────────────────────────────────────────────
-
+#
 # Patterns are checked in order. First match wins.
-# Add your project's module structure here.
+# Customize this list for your project's directory structure.
+# The module name is stored as metadata on each chunk — agents can filter
+# queries to a specific module using --module <name>.
+#
 MODULE_PATTERNS: list[tuple[str, list[str]]] = [
     # Auth / Identity
     ("auth",          ["**/auth/**", "**/authentication/**", "**/user-auth/**", "**/login/**",
-                       "**/identity/**", "**/sso/**"]),
+                        "**/identity/**", "**/oauth/**", "**/jwt/**"]),
     # Payments / Billing
-    ("payments",      ["**/payment*/**", "**/billing/**", "**/invoice*/**",
-                       "**/subscription-billing/**", "**/checkout-payment/**"]),
+    ("payments",      ["**/payment*/**", "**/billing/**", "**/stripe/**", "**/braintree/**",
+                        "**/invoice/**", "**/subscription*/**", "**/plan*/**"]),
     # Orders
-    ("orders",        ["**/order*/**"]),
-    # Cart / Checkout
-    ("cart",          ["**/cart*/**", "**/checkout*/**", "**/shopping*/**", "**/basket*/**"]),
-    # Listings / Products / Catalog
-    ("listings",      ["**/listing*/**", "**/product*/**", "**/catalog*/**", "**/item*/**"]),
-    # Notifications
+    ("orders",        ["**/order*/**", "**/checkout*/**", "**/purchase*/**"]),
+    # Cart
+    ("cart",          ["**/cart*/**", "**/basket*/**", "**/shopping*/**"]),
+    # Notifications / Messaging
     ("notifications", ["**/notification*/**", "**/email/**", "**/sms/**", "**/push/**",
-                       "**/mailer/**", "**/emailer/**"]),
+                        "**/mailer/**", "**/messaging/**"]),
     # Users / Profiles
     ("users",         ["**/user*/**", "**/profile*/**", "**/account*/**", "**/member*/**"]),
+    # Products / Catalog / Listings
+    ("products",      ["**/product*/**", "**/catalog*/**", "**/listing*/**", "**/inventory*/**"]),
     # Search
-    ("search",        ["**/search/**", "**/elastic*/**", "**/solr/**", "**/index*/**"]),
+    ("search",        ["**/search/**", "**/elastic*/**", "**/solr/**", "**/algolia/**"]),
     # Scheduler / Jobs / Queues
     ("scheduler",     ["**/scheduler/**", "**/cron/**", "**/jobs/**", "**/queue*/**",
-                       "**/worker*/**", "**/processor*/**", "**/task*/**"]),
+                        "**/worker*/**", "**/processor*/**", "**/task*/**"]),
     # Webhooks / Events
-    ("webhooks",      ["**/webhook*/**", "**/hooks/**", "**/event*/**", "**/listener*/**"]),
-    # Reports / Documents
-    ("reports",       ["**/report*/**", "**/document*/**", "**/export*/**", "**/pdf*/**"]),
-    # Fraud / Risk
-    ("fraud",         ["**/fraud/**", "**/risk/**", "**/compliance/**", "**/abuse/**"]),
-    # Saved items / Favorites
-    ("saved",         ["**/saved*/**", "**/bookmark*/**", "**/wishlist*/**", "**/favorite*/**"]),
+    ("webhooks",      ["**/webhook*/**", "**/hooks/**", "**/event*/**"]),
+    # Reports / Analytics
+    ("reports",       ["**/report*/**", "**/analytics/**", "**/metrics/**", "**/stats/**"]),
+    # Fraud / Security / Risk
+    ("fraud",         ["**/fraud/**", "**/risk/**", "**/abuse/**", "**/security/**"]),
     # Admin / Dashboard
-    ("admin",         ["**/admin*/**", "**/dashboard/**", "**/backoffice/**", "**/internal/**"]),
-    # Messages / Chat
-    ("messages",      ["**/message*/**", "**/chat/**", "**/inbox/**", "**/thread*/**",
-                       "**/conversation*/**"]),
+    ("admin",         ["**/admin*/**", "**/dashboard/**", "**/backoffice/**", "**/cms/**"]),
+    # Messages / Chat / Inbox
+    ("messages",      ["**/message*/**", "**/chat/**", "**/inbox/**", "**/thread*/**"]),
     # Pricing / Discount
     ("pricing",       ["**/pricing/**", "**/discount*/**", "**/coupon*/**", "**/promo*/**"]),
-    # Subscriptions / Plans
-    ("subscriptions", ["**/subscription*/**", "**/plan*/**", "**/tier*/**"]),
-    # Device / Session
-    ("device",        ["**/device*/**", "**/session*/**", "**/token*/**"]),
+    # Saved / Bookmarks / Favorites
+    ("saved",         ["**/saved*/**", "**/bookmark*/**", "**/wishlist*/**", "**/favorite*/**"]),
     # Refund / Returns
     ("refund",        ["**/refund*/**", "**/return*/**", "**/chargeback*/**"]),
-    # UI common / components
-    ("ui-common",     ["**/components/common/**", "**/components/shared/**",
-                       "**/components/ui/**", "**/design-system/**"]),
-    # UI pages
-    ("ui-pages",      ["**/pages/**", "**/views/**", "**/screens/**"]),
+    # Device / Session
+    ("device",        ["**/device*/**", "**/session*/**"]),
+    # Common / Shared infrastructure
+    ("common",        ["**/common/**", "**/shared/**", "**/core/**"]),
+    # Cache
+    ("cache",         ["**/cache/**", "**/redis/**", "**/memcache*/**"]),
+    # Feature flags
+    ("feature-flag",  ["**/feature-flag*/**", "**/feature-flags/**", "**/flags/**",
+                        "**/launchdarkly/**", "**/unleash/**"]),
+    # External integrations
+    ("integration",   ["**/integration*/**", "**/external*/**", "**/third-party/**",
+                        "**/adapter*/**", "**/connector*/**"]),
+    # UI components
+    ("ui-components", ["**/components/**"]),
+    # UI pages / routes
+    ("ui-pages",      ["**/pages/**", "**/views/**", "**/routes/**"]),
     # UI stores / state
     ("ui-stores",     ["**/stores/**", "**/store/**", "**/state/**", "**/context/**"]),
     # UI composables / hooks
-    ("ui-composables",["**/composables/**", "**/hooks/**", "**/use-*.ts", "**/use-*.js"]),
+    ("ui-composables",["**/composables/**", "**/hooks/**"]),
     # Infrastructure / Config
-    ("infra",         ["**/config/**", "**/infra/**", "**/setup/**", "**/middleware/**",
-                       "**/bootstrap/**"]),
-    # External service integrations
-    # Add your 3rd-party service directories here, e.g.:
-    #   ("payments-gateway", ["**/stripe/**", "**/paypal/**"]),
-    #   ("analytics",        ["**/segment/**", "**/mixpanel/**"]),
-    ("integration",   ["**/external*/**", "**/third-party/**", "**/partner*/**",
-                       "**/api-client*/**", "**/sdk*/**"]),
+    ("infra",         ["**/config/**", "**/infra/**", "**/setup/**", "**/middleware/**"]),
 ]
 
 
@@ -157,9 +169,12 @@ DOC_TYPE_PATTERNS: list[tuple[str, list[str]]] = [
     ("component",  ["*.vue", "*.tsx", "*Component.*"]),
     ("schema",     ["*.schema.*", "*Schema.*", "*.model.*", "*Model.*", "*Entity.*", "*.prisma"]),
     ("middleware", ["*.middleware.*", "*Middleware.*", "*.guard.*", "*.interceptor.*", "*.filter.*"]),
+    ("constants",  ["*.constants.*", "*Constants.*"]),
+    ("dto",        ["*.dto.*", "*Dto.*"]),
+    ("types",      ["*.interface.*", "*.type.*", "*.types.*"]),
     ("util",       ["*.util.*", "*Utils.*", "*Helper.*", "*.helper.*"]),
-    ("spec",       ["*.dto.*", "*Dto.*", "*.interface.*", "*.type.*", "*.types.*"]),
-    ("config",     ["*.config.*", "*Config.*", ".env*", "nuxt.config.*", "vite.config.*"]),
+    ("config",     ["*.config.*", "*Config.*", ".env*", "nuxt.config.*", "vite.config.*",
+                    "next.config.*", "django_settings*"]),
     ("docs",       ["*.md", "*.mdx"]),
 ]
 
@@ -173,15 +188,15 @@ def classify_doc_type(file_path: str) -> str:
     return "source"
 
 
-# ── Category classification ────────────────────────────────────────────────
-
 def classify_category(module: str, doc_type: str) -> str:
     if doc_type == "test":
         return "testing"
-    if doc_type in ("schema",):
+    if doc_type == "schema":
         return "data-access"
-    if doc_type in ("dto", "spec", "interface"):
+    if doc_type in ("dto", "types"):
         return "api-contract"
+    if doc_type == "constants":
+        return "constants"
     if doc_type == "component":
         return "ui-component"
     if doc_type in ("config", "middleware"):
@@ -194,8 +209,6 @@ def classify_category(module: str, doc_type: str) -> str:
         return "api-contract"
     return "business-logic"
 
-
-# ── Language classification ────────────────────────────────────────────────
 
 LANGUAGE_MAP = {
     ".ts": "typescript", ".tsx": "typescript",
@@ -218,6 +231,80 @@ def classify_language(file_path: str) -> str:
 
 # ── Chunking ───────────────────────────────────────────────────────────────
 
+import re as _re
+
+# Class declaration pattern — used to inject enclosing class context into
+# chunk embeddings so method-level chunks stay anchored to their class.
+# Without this, a method chunk for `UserService.findById()` embeds with no
+# class context, making it hard to retrieve when querying "user service".
+_CLASS_DECL = _re.compile(
+    r'^(?:export\s+)?(?:abstract\s+)?class\s+(\w+)',
+    _re.MULTILINE,
+)
+
+
+def extract_class_context(file_content: str, chunk_start: int) -> str | None:
+    """Return the enclosing class name for a chunk at the given byte offset."""
+    matches = list(_CLASS_DECL.finditer(file_content, 0, chunk_start))
+    return matches[-1].group(1) if matches else None
+
+
+# Top-level declaration boundaries for smart chunking
+_TS_BOUNDARY = _re.compile(
+    r'^(?:export\s+(?:default\s+)?(?:class|function|const|async\s+function|abstract\s+class)'
+    r'|(?:class|function)\s+\w'
+    r'|@\w+)',  # decorators (@Injectable, @Component, etc.)
+    _re.MULTILINE,
+)
+
+_MD_HEADER = _re.compile(r'^#{1,3} .+', _re.MULTILINE)
+
+
+def _find_boundaries(text: str, language: str) -> list[int]:
+    if language in ("typescript", "javascript", "vue"):
+        return [m.start() for m in _TS_BOUNDARY.finditer(text)]
+    if language in ("markdown",):
+        return [m.start() for m in _MD_HEADER.finditer(text)]
+    return []
+
+
+def chunk_smart(text: str, language: str, max_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
+    """Chunk at logical boundaries (function/class/header); fall back to character split."""
+    if len(text) <= max_size:
+        return [text]
+
+    boundaries = _find_boundaries(text, language)
+    if not boundaries or boundaries[0] != 0:
+        boundaries = [0] + boundaries
+
+    chunks: list[str] = []
+    current_start = 0
+
+    for i, boundary in enumerate(boundaries):
+        if boundary <= current_start:
+            continue
+        segment = text[current_start:boundary]
+        if len(segment) >= max_size:
+            chunks.extend(chunk_text(segment, max_size, overlap))
+            current_start = boundary
+        elif i == len(boundaries) - 1:
+            tail = text[current_start:]
+            if len(tail) > max_size:
+                chunks.extend(chunk_text(tail, max_size, overlap))
+            else:
+                chunks.append(tail)
+            current_start = len(text)
+
+    if current_start < len(text):
+        tail = text[current_start:]
+        if len(tail) > max_size:
+            chunks.extend(chunk_text(tail, max_size, overlap))
+        elif tail.strip():
+            chunks.append(tail)
+
+    return chunks or [text]
+
+
 def chunk_text(text: str, max_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
     if len(text) <= max_size:
         return [text]
@@ -234,11 +321,31 @@ def chunk_text(text: str, max_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERL
     return chunks
 
 
+def chunk_smart_with_offsets(
+    text: str, language: str, max_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP
+) -> list[tuple[str, int]]:
+    """Like chunk_smart but returns (chunk_text, start_offset) tuples.
+
+    The start offset is used to look up the enclosing class name so that
+    method-level chunks embed with class context injected.
+    """
+    chunks = chunk_smart(text, language, max_size, overlap)
+    result: list[tuple[str, int]] = []
+    pos = 0
+    for chunk in chunks:
+        idx = text.find(chunk, pos)
+        start = idx if idx != -1 else pos
+        result.append((chunk, start))
+        pos = start + max(1, len(chunk) - overlap)
+    return result
+
+
 # ── Weaviate ───────────────────────────────────────────────────────────────
 
 def get_client(url: str = WEAVIATE_URL) -> weaviate.WeaviateClient:
     port = int(url.rstrip("/").split(":")[-1])
-    return weaviate.connect_to_local(host="localhost", port=port, grpc_port=port + 1)
+    grpc_port = WEAVIATE_GRPC_PORT if WEAVIATE_GRPC_PORT else port + 1
+    return weaviate.connect_to_local(host="localhost", port=port, grpc_port=grpc_port)
 
 
 def collection_name(base: str, project: str) -> str:
@@ -284,16 +391,40 @@ def init_schema(client: weaviate.WeaviateClient, project: str) -> None:
             wvc.config.Property(name="comment",      data_type=wvc.config.DataType.TEXT,
                                 index_searchable=True),
             wvc.config.Property(name="category",     data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="module",       data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="doc_type",     data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="decision",     data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="reasoning",    data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="was_resolved", data_type=wvc.config.DataType.BOOL),
             wvc.config.Property(name="author",       data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="pr_author",    data_type=wvc.config.DataType.TEXT),
             wvc.config.Property(name="created_at",   data_type=wvc.config.DataType.DATE),
         ]),
         (collection_name("SolutionApproach", project), [
-            wvc.config.Property(name="ticket_id",    data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="title",        data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="approach",     data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="review_notes", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="status",       data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="created_at",   data_type=wvc.config.DataType.DATE),
+            wvc.config.Property(name="ticket_id",     data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="title",         data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="approach",      data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="review_notes",  data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="status",        data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="modules",       data_type=wvc.config.DataType.TEXT_ARRAY),
+            wvc.config.Property(name="files_changed", data_type=wvc.config.DataType.TEXT_ARRAY),
+            wvc.config.Property(name="pr_number",     data_type=wvc.config.DataType.INT),
+            wvc.config.Property(name="created_at",    data_type=wvc.config.DataType.DATE),
+        ]),
+        (collection_name("ArchitectureDecisions", project), [
+            wvc.config.Property(name="adr_id",        data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="title",         data_type=wvc.config.DataType.TEXT,
+                                index_searchable=True),
+            wvc.config.Property(name="status",        data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="context",       data_type=wvc.config.DataType.TEXT,
+                                index_searchable=True),
+            wvc.config.Property(name="decision",      data_type=wvc.config.DataType.TEXT,
+                                index_searchable=True),
+            wvc.config.Property(name="consequences",  data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="modules",       data_type=wvc.config.DataType.TEXT_ARRAY),
+            wvc.config.Property(name="source_file",   data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="content_hash",  data_type=wvc.config.DataType.TEXT),
+            wvc.config.Property(name="created_at",    data_type=wvc.config.DataType.DATE),
         ]),
     ]
 
@@ -310,6 +441,26 @@ def init_schema(client: weaviate.WeaviateClient, project: str) -> None:
                 properties=props,
             )
             print(f"Created collection: {coll_name}")
+
+
+def migrate_schema(client: weaviate.WeaviateClient, project: str) -> None:
+    """Drop and recreate all collections. Required when EMBED_DIMS changes.
+
+    After running --migrate, re-index everything:
+      python update_kb.py --repo-root . --project myapp --full
+      python update_kb.py --standards --repo-root . --project myapp
+    """
+    existing = {c.name for c in client.collections.list_all().values()}
+    bases = ["CodebaseKnowledge", "CodingStandards", "ReviewPatterns",
+             "SolutionApproach", "ArchitectureDecisions"]
+    for base in bases:
+        name = collection_name(base, project)
+        if name in existing:
+            client.collections.delete(name)
+            print(f"Dropped: {name}")
+    print("Re-creating collections with updated schema...")
+    init_schema(client, project)
+    print("Migration complete. Re-run --standards and codebase indexing to repopulate.")
 
 
 def should_skip(path: Path) -> bool:
@@ -335,7 +486,6 @@ def update_codebase(
     coll_name = collection_name("CodebaseKnowledge", project)
     collection = client.collections.get(coll_name)
 
-    # Load existing hashes
     existing_hashes: dict[str, str] = {}
     if not force_full:
         try:
@@ -375,8 +525,8 @@ def update_codebase(
         category = classify_category(module, doc_type)
         language = classify_language(rel_path)
 
-        chunks = chunk_text(content)
-        for i, chunk in enumerate(chunks):
+        chunks_with_offsets = chunk_smart_with_offsets(content, language)
+        for i, (chunk, chunk_offset) in enumerate(chunks_with_offsets):
             chunk_id = f"{rel_path}::chunk_{i}"
             content_hash = hashlib.md5(chunk.encode()).hexdigest()
 
@@ -384,8 +534,15 @@ def update_codebase(
                 skipped += 1
                 continue
 
-            # Build embedding text with classification prefix for better retrieval
-            embed_text = f"[module:{module}] [type:{doc_type}]\nFile: {rel_path}\n\n{chunk}"
+            # Inject enclosing class name for TS/JS so method chunks stay
+            # anchored to their class during retrieval.
+            class_ctx = (
+                extract_class_context(content, chunk_offset)
+                if language in ("typescript", "javascript")
+                else None
+            )
+            class_header = f"// Class: {class_ctx}\n" if class_ctx else ""
+            embed_text = f"[module:{module}] [type:{doc_type}]\nFile: {rel_path}\n{class_header}\n{chunk}"
             vector = embed(embed_text)
 
             props = {
@@ -401,7 +558,6 @@ def update_codebase(
             }
 
             if chunk_id in existing_hashes:
-                # Update existing — delete and re-insert
                 old_results = collection.query.fetch_objects(
                     filters=wvc.query.Filter.by_property("chunk_id").equal(chunk_id),
                     limit=1,
@@ -441,9 +597,9 @@ def update_standards(
     coll_name = collection_name("CodingStandards", project)
     collection = client.collections.get(coll_name)
 
-    # Look for rule files in common locations
     rule_dirs = [
         repo_root / ".claude" / "rules",
+        repo_root / ".claude" / "commands",
         repo_root / ".cursor" / "rules",
         repo_root / "docs" / "standards",
         repo_root / "docs" / "guidelines",
@@ -456,6 +612,18 @@ def update_standards(
             rule_files.extend(d.glob("*.md"))
             rule_files.extend(d.glob("*.mdc"))
             rule_files.extend(d.glob("*.txt"))
+
+    docs_root = repo_root / "docs"
+    if docs_root.exists():
+        for f in docs_root.rglob("*.md"):
+            if f not in rule_files:
+                rule_files.append(f)
+
+    for root_file in ["CODE_STANDARDS.md", "CLAUDE.md", "README.md", "CONTRIBUTING.md",
+                       "pull_request_template.md"]:
+        p = repo_root / root_file
+        if p.exists() and p not in rule_files:
+            rule_files.append(p)
 
     if not rule_files:
         print("No rule files found. Checked: .claude/rules/, .cursor/rules/, docs/standards/")
@@ -549,10 +717,200 @@ def _extract_title(content: str, fallback: str) -> str:
     return fallback
 
 
+def _parse_adr(content: str) -> dict:
+    """Extract ADR fields from a Markdown ADR file (MADR/Nygard style)."""
+    sections: dict[str, str] = {}
+    current_section = "header"
+    lines_buf: list[str] = []
+
+    for line in content.splitlines():
+        heading = None
+        if line.startswith("## "):
+            heading = line[3:].strip().lower()
+        elif line.startswith("# "):
+            heading = "title"
+
+        if heading is not None:
+            sections[current_section] = "\n".join(lines_buf).strip()
+            lines_buf = []
+            current_section = heading
+            if heading == "title":
+                lines_buf.append(line[2:].strip())
+        else:
+            lines_buf.append(line)
+
+    sections[current_section] = "\n".join(lines_buf).strip()
+
+    title = sections.get("title", "")
+    status = ""
+    for key in sections:
+        if "status" in key:
+            status = sections[key].split("\n")[0].strip()
+            break
+
+    context = sections.get("context", sections.get("context and problem statement", ""))
+    decision = sections.get("decision", sections.get("decision outcome", ""))
+    consequences = sections.get("consequences", sections.get("positive consequences", ""))
+
+    return {
+        "title": title,
+        "status": status or "accepted",
+        "context": context,
+        "decision": decision,
+        "consequences": consequences,
+    }
+
+
+def update_adrs(
+    client: weaviate.WeaviateClient,
+    repo_root: Path,
+    project: str,
+) -> None:
+    coll_name = collection_name("ArchitectureDecisions", project)
+
+    try:
+        adr_collection = client.collections.get(coll_name)
+    except Exception:
+        print(f"ArchitectureDecisions collection not found: {coll_name}. Run --init-schema first.")
+        return
+
+    adr_dirs = [
+        repo_root / "docs" / "adr",
+        repo_root / "docs" / "decisions",
+        repo_root / "docs" / "architecture",
+        repo_root / ".claude" / "decisions",
+        repo_root / "adr",
+    ]
+
+    adr_files: list[Path] = []
+    for d in adr_dirs:
+        if d.exists():
+            adr_files.extend(sorted(d.glob("*.md")))
+
+    if not adr_files:
+        print(f"No ADR files found. Checked: {[str(d) for d in adr_dirs]}")
+        print("Create docs/adr/0001-example.md to get started.")
+        return
+
+    existing_hashes: dict[str, str] = {}
+    try:
+        result = adr_collection.query.fetch_objects(
+            limit=10_000, return_properties=["adr_id", "content_hash"]
+        )
+        for obj in result.objects:
+            aid = obj.properties.get("adr_id", "")
+            h = obj.properties.get("content_hash", "")
+            if aid:
+                existing_hashes[aid] = h
+    except Exception:
+        pass
+
+    added = updated = skipped = 0
+
+    for file_path in adr_files:
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+
+        if not content.strip():
+            skipped += 1
+            continue
+
+        adr_id = file_path.stem
+        content_hash = hashlib.md5(content.encode()).hexdigest()
+
+        if existing_hashes.get(adr_id) == content_hash:
+            skipped += 1
+            continue
+
+        parsed = _parse_adr(content)
+        title = parsed["title"] or file_path.stem
+        full_text = f"{title}\n\n{parsed['context']}\n\n{parsed['decision']}\n\n{parsed['consequences']}"
+        vector = embed(f"ADR: {title}\n\n{full_text}")
+
+        props = {
+            "adr_id": adr_id,
+            "title": title,
+            "status": parsed["status"],
+            "context": parsed["context"],
+            "decision": parsed["decision"],
+            "consequences": parsed["consequences"],
+            "modules": [],
+            "source_file": str(file_path.relative_to(repo_root)),
+            "content_hash": content_hash,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        if adr_id in existing_hashes:
+            old = adr_collection.query.fetch_objects(
+                filters=wvc.query.Filter.by_property("adr_id").equal(adr_id), limit=1
+            )
+            if old.objects:
+                adr_collection.data.delete_by_id(old.objects[0].uuid)
+            updated += 1
+        else:
+            added += 1
+
+        adr_collection.data.insert(properties=props, vector=vector)
+
+    print(f"Architecture Decisions [{coll_name}]: added={added}, updated={updated}, skipped={skipped}")
+
+
+def prune_stale_chunks(
+    client: weaviate.WeaviateClient,
+    repo_root: Path,
+    project: str,
+) -> None:
+    """Delete chunks whose source files no longer exist in the repo."""
+    coll_name = collection_name("CodebaseKnowledge", project)
+    collection = client.collections.get(coll_name)
+
+    all_chunks: list[tuple[str, str, str]] = []
+    try:
+        result = collection.query.fetch_objects(
+            limit=100_000,
+            return_properties=["chunk_id", "file_path"],
+        )
+        for obj in result.objects:
+            cid = obj.properties.get("chunk_id", "")
+            fp = obj.properties.get("file_path", "")
+            if cid:
+                all_chunks.append((str(obj.uuid), cid, fp))
+    except Exception as e:
+        print(f"Failed to fetch chunks: {e}")
+        return
+
+    unique_paths = {fp for _, _, fp in all_chunks if fp}
+    missing_paths = {fp for fp in unique_paths if not (repo_root / fp).exists()}
+
+    if not missing_paths:
+        print(f"Prune [{coll_name}]: no stale chunks found ({len(all_chunks):,} chunks, all files present)")
+        return
+
+    stale_uuids = [uuid for uuid, _, fp in all_chunks if fp in missing_paths]
+    print(f"Prune [{coll_name}]: found {len(missing_paths)} missing files, "
+          f"deleting {len(stale_uuids)} stale chunks...")
+
+    deleted = 0
+    for uuid in stale_uuids:
+        try:
+            collection.data.delete_by_id(uuid)
+            deleted += 1
+        except Exception:
+            pass
+
+    print(f"Prune [{coll_name}]: deleted={deleted}, missing_files={len(missing_paths)}")
+    for p in sorted(missing_paths)[:10]:
+        print(f"  - {p}")
+    if len(missing_paths) > 10:
+        print(f"  ... and {len(missing_paths) - 10} more")
+
+
 def print_stats(client: weaviate.WeaviateClient, project: str) -> None:
     all_collections = client.collections.list_all()
-    prefix = "" if not project or project == "default" else f"_{project.replace('-', '_')}"
-    bases = ["CodebaseKnowledge", "CodingStandards", "ReviewPatterns", "SolutionApproach"]
+    bases = ["CodebaseKnowledge", "CodingStandards", "ReviewPatterns",
+             "SolutionApproach", "ArchitectureDecisions"]
     print(f"\n=== Weaviate Stats (project: {project or 'default'}) ===")
     for base in bases:
         name = collection_name(base, project)
@@ -572,17 +930,41 @@ def main() -> None:
     parser.add_argument("--project", default=os.getenv("AGENTS_PROJECT", "default"),
                         help="Project name for collection namespacing")
     parser.add_argument("--standards", action="store_true",
-                        help="Update CodingStandards collection (looks in .claude/rules/, .cursor/rules/)")
+                        help="Update CodingStandards collection")
     parser.add_argument("--init-schema", action="store_true",
                         help="Create collections if they don't exist")
     parser.add_argument("--stats", action="store_true",
                         help="Print collection statistics")
     parser.add_argument("--full", action="store_true",
                         help="Force re-embed all files (ignore cached hashes)")
+    parser.add_argument("--migrate", action="store_true",
+                        help="Drop and recreate all collections (required after EMBED_MODEL change)")
+    parser.add_argument("--prune", action="store_true",
+                        help="Delete chunks whose source files no longer exist in the repo")
+    parser.add_argument("--adrs", action="store_true",
+                        help="Index Architecture Decision Records from docs/adr/ or docs/decisions/")
     args = parser.parse_args()
+
+    # Readiness check — fail fast before attempting connection
+    import urllib.request
+    def _weaviate_ready(url: str = WEAVIATE_URL) -> bool:
+        try:
+            with urllib.request.urlopen(f"{url}/v1/.well-known/ready", timeout=3) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    if not _weaviate_ready():
+        print(f"⚠️  Weaviate not reachable at {WEAVIATE_URL}")
+        print("Start it: python scripts/start_weaviate.py")
+        sys.exit(1)
 
     client = get_client()
     try:
+        if args.migrate:
+            migrate_schema(client, args.project)
+            return
+
         if args.init_schema:
             init_schema(client, args.project)
             return
@@ -596,7 +978,11 @@ def main() -> None:
             print(f"Repo root not found: {repo_root}")
             sys.exit(1)
 
-        if args.standards:
+        if args.prune:
+            prune_stale_chunks(client, repo_root, args.project)
+        elif args.adrs:
+            update_adrs(client, repo_root, args.project)
+        elif args.standards:
             update_standards(client, repo_root, args.project)
         else:
             update_codebase(client, repo_root, args.project, force_full=args.full)

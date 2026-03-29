@@ -127,33 +127,39 @@ See [docs/developer-guide.md](docs/developer-guide.md) for the full walkthrough 
 
 See [docs/rag-basics.md](docs/rag-basics.md) for full explanation. Summary:
 
-1. **Indexing:** Your source files are chunked (2000 chars, 200 overlap) and embedded using `BAAI/bge-small-en-v1.5` (22 MB, runs locally, no API key)
-2. **Storage:** Embeddings stored in Weaviate with metadata (file path, module, doc_type, category)
-3. **Retrieval:** Hybrid search — cosine vector similarity + BM25 keyword — merged via Reciprocal Rank Fusion
-4. **Re-ranking:** Top-20 results re-ranked by a cross-encoder to top-5 for precision
-5. **Injection:** LLM agent receives the top-5 chunks as grounded context
+1. **Indexing:** Your source files are chunked (2000 chars, 200 overlap) and embedded using `jinaai/jina-embeddings-v2-base-code` (768d, code-aware, runs locally, no API key)
+2. **Storage:** Embeddings stored in Weaviate with metadata (file path, module, doc_type, category, class context)
+3. **Retrieval:** Hybrid search — cosine vector similarity + BM25 keyword — merged via Reciprocal Rank Fusion; per-collection alpha tuning
+4. **Multi-query:** 2–3 query variants generated automatically, merged and deduplicated before re-ranking
+5. **Re-ranking:** Top-20 results re-ranked by `cross-encoder/ms-marco-MiniLM-L-12-v2` (L-12, 768d) to top-5 for precision
+6. **Injection:** LLM agent receives the top-5 chunks as grounded context
 
 ---
 
-## The 9-Agent SDLC Pipeline
+## The SDLC Agent Pipeline
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  TICKET                                                          │
 ├──────────────────────────────────────────────────────────────────┤
-│  1. knowledge-update  — Sync codebase to Weaviate     [haiku]   │
-│  2. standards-update  — Index coding rules            [haiku]   │
-│  3. pr-review-kb      — Index PR review patterns      [haiku]   │
+│  /update-kb          — Sync codebase to Weaviate      [haiku]   │
+│  /update-standards   — Index coding rules             [haiku]   │
+│  /update-pr-kb       — Index PR review patterns       [haiku]   │
 ├──────────────────────────────────────────────────────────────────┤
-│  4. solution-approach — Draft solution using RAG      [haiku]   │
-│  5. solution-review   — Review solution approach      [sonnet]  │ ← GATE ✋
+│  /solution           — Draft solution using RAG       [haiku]   │
+│  /challenge-solution — Adversarial stress-test        [sonnet]  │
+│  /review-solution    — Gate: approve or block         [sonnet]  │ ← GATE ✋
 ├──────────────────────────────────────────────────────────────────┤
-│  6. code-agent        — TDD implementation using RAG  [haiku]   │
-│  7. code-review       — Review implementation         [sonnet]  │ ← GATE ✋
-│  8. unit-test-review  — Audit test quality            [sonnet]  │
+│  /code               — TDD implementation using RAG   [haiku]   │
+│  /review-code        — Review implementation          [sonnet]  │ ← GATE ✋
+│  /write-tests        — Write or fix unit tests        [sonnet]  │
+│  /review-tests       — Audit test quality and gaps    [sonnet]  │
+│  /mate-review        — Pre-PR peer review             [sonnet]  │
 ├──────────────────────────────────────────────────────────────────┤
-│  9. pr-review-agent   — Respond to reviewer comments  [sonnet]  │
-│  +  safe-commit       — Pre-commit validation         [haiku]   │
+│  /pr-review          — Respond to reviewer comments   [sonnet]  │
+│  /safe-commit        — Pre-commit validation          [haiku]   │
+│  /debug              — RAG-grounded bug investigation  [sonnet]  │
+│  /refactor           — Safe, scope-bounded refactor   [sonnet]  │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -308,32 +314,88 @@ Any developer on any repo gets: RAG context, review patterns, solution history, 
 
 ---
 
+## Precision Improvements
+
+The default setup gives good results. These improvements push retrieval precision
+further — especially for large codebases (50k+ chunks) and teams with complex modules.
+
+See [docs/precision-tuning.md](docs/precision-tuning.md) for the full guide.
+
+| Improvement | Default | Upgraded | Benefit |
+|-------------|---------|----------|---------|
+| Embedding model | `BAAI/bge-small-en-v1.5` (384d) | `jinaai/jina-embeddings-v2-base-code` (768d) | Understands class hierarchies, decorators, type annotations |
+| Reranker | `ms-marco-MiniLM-L-6-v2` | `ms-marco-MiniLM-L-12-v2` | 2× deeper, better at distinguishing near-miss chunks |
+| Query strategy | Single query | `--multi-query` — 3 variants, merged | Catches results that one phrasing misses |
+| Module scope | All modules | `--module auth` | Scopes to a feature area, cuts noise |
+| Relevance gate | No filter | `--min-score 0.5` | Drops low-confidence results |
+| Class context | None | Auto-injected `// Class: ClassName` | Service/controller method lookups dramatically improved |
+| File size limit | 50KB | 150KB | Large service files no longer silently skipped |
+| Per-collection alpha | Fixed 0.5 | `codebase=0.6, reviews=0.8` | Tuned to collection characteristics |
+
+**To upgrade from the default model:**
+```bash
+# 1. Update EMBED_MODEL_NAME in update_kb.py to jinaai/jina-embeddings-v2-base-code
+# 2. Migrate schema (drops and recreates collections)
+python scripts/update_kb.py --migrate --repo-root $PROJECT_ROOT --project myapp
+# 3. Full re-index
+python scripts/update_kb.py --full --repo-root $PROJECT_ROOT --project myapp
+```
+
+---
+
 ## Cheat Sheet
 
 ```bash
 # Start Weaviate
 ~/.sdlc-agents-venv/bin/python $AGENTS_ROOT/scripts/start_weaviate.py
 
-# Index codebase
+# Index codebase (incremental — only changed files)
 AGENTS_WEAVIATE_URL=http://localhost:8090 \
 ~/.sdlc-agents-venv/bin/python $AGENTS_ROOT/scripts/update_kb.py \
   --repo-root $PROJECT_ROOT --project myapp
+
+# Force full re-index (after model change or large rebase)
+AGENTS_WEAVIATE_URL=http://localhost:8090 \
+~/.sdlc-agents-venv/bin/python $AGENTS_ROOT/scripts/update_kb.py \
+  --full --repo-root $PROJECT_ROOT --project myapp
+
+# Migrate schema (REQUIRED after changing embedding model)
+AGENTS_WEAVIATE_URL=http://localhost:8090 \
+~/.sdlc-agents-venv/bin/python $AGENTS_ROOT/scripts/update_kb.py \
+  --migrate --repo-root $PROJECT_ROOT --project myapp
 
 # Index coding standards
 AGENTS_WEAVIATE_URL=http://localhost:8090 \
 ~/.sdlc-agents-venv/bin/python $AGENTS_ROOT/scripts/update_kb.py \
   --standards --repo-root $PROJECT_ROOT --project myapp
 
-# Index PR review history
+# Index PR review history (all merged + open PRs)
 cd $PROJECT_ROOT
 AGENTS_WEAVIATE_URL=http://localhost:8090 \
 ~/.sdlc-agents-venv/bin/python $AGENTS_ROOT/scripts/update_pr_kb.py \
-  --limit 100 --include-open --project myapp
+  --limit 200 --include-open --extract-solutions --project myapp
 
-# Query RAG
+# Query RAG — basic
 AGENTS_WEAVIATE_URL=http://localhost:8090 \
 ~/.sdlc-agents-venv/bin/python $AGENTS_ROOT/scripts/query_rag.py \
   "your query here" --project myapp --rerank
+
+# Query RAG — precision flags
+AGENTS_WEAVIATE_URL=http://localhost:8090 \
+~/.sdlc-agents-venv/bin/python $AGENTS_ROOT/scripts/query_rag.py \
+  "authentication service" \
+  --project myapp \
+  --rerank \
+  --multi-query \           # generate 2-3 query variants, merge results
+  --module auth \           # scope to a specific module
+  --min-score 0.5 \         # filter low-relevance results
+  --top 5
+
+# Query a specific collection
+AGENTS_WEAVIATE_URL=http://localhost:8090 \
+~/.sdlc-agents-venv/bin/python $AGENTS_ROOT/scripts/query_rag.py \
+  "missing null check" \
+  --collection reviews --project myapp --rerank --top 10
 
 # Check stats
 AGENTS_WEAVIATE_URL=http://localhost:8090 \
@@ -352,6 +414,7 @@ AGENTS_WEAVIATE_URL=http://localhost:8090 \
 | [docs/vector-db-setup.md](docs/vector-db-setup.md) | Weaviate install, HNSW, BM25, hybrid search, tuning |
 | [docs/embeddings.md](docs/embeddings.md) | Module classification, doc_type taxonomy, category schema |
 | [docs/reranking.md](docs/reranking.md) | Cross-encoder re-ranking, when to use it, performance tradeoffs |
+| [docs/precision-tuning.md](docs/precision-tuning.md) | **Advanced** — jina-code model, L-12 reranker, multi-query, class context, per-collection alpha |
 | [docs/team-scale.md](docs/team-scale.md) | Review patterns KB, org-wide rollout, 100+ dev teams |
 | [docs/mcp-guide.md](docs/mcp-guide.md) | Jira MCP, GitHub MCP, tool use in agents |
 | [cursor/README.md](cursor/README.md) | Full Cursor setup guide |
